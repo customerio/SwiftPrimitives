@@ -74,30 +74,20 @@ public final class DependencyContainer: Sendable {
         
         /// Registers an object to be used when an object attempts to resolve the provided type.
         public func register<T>(as type: T.Type = T.self, singleton: T) -> Self {
-            var result = self
-            let id = ObjectIdentifier(T.self)
-            result.factories[id] = { _ in singleton }
-            
-            return result
+            return register(as: type) { _ in singleton }
         }
         
         /// Registers a closure to create a singleton when it is first requested. Once created, that
         /// same object will be returned from all subsequent requests.
         public func registerLazySingleton<T>(as type: T.Type = T.self, factory: @escaping (Resolver) throws -> T) -> Self {
-            var result = self
-            let id = ObjectIdentifier(T.self)
-            
             var instance: T? = nil
-            
-            result.factories[id] = { resolver in
+            return register(as: type) { resolver in
                 if let instance = instance {
                     return instance
                 }
                 instance = try factory(resolver)
                 return instance!
             }
-            
-            return result
         }
         
         /// Called to generate the DependencyContainer when registrations are completed.
@@ -123,17 +113,17 @@ public final class DependencyContainer: Sendable {
     }
     
     public func register<T>(as type: T.Type = T.self, constructor: @escaping () -> T) {
-        register { _ in constructor() }
+        register(as: type) { _ in constructor() }
     }
     
-    public func register<T>(as type: T.Type = T.self, singleton: T) async {
-        register { _ in singleton }
+    public func register<T>(as type: T.Type = T.self, singleton: T) {
+        register(as: type) { _ in singleton }
     }
     
     public func registerLazySingleton<T>(as type: T.Type = T.self, factory: @escaping (Resolver) throws -> T) async {
         
         var instance: T? = nil
-        register { resolver in
+        register(as: type) { resolver in
             if let instance = instance {
                 return instance
             }
@@ -152,7 +142,7 @@ public final class DependencyContainer: Sendable {
     }
     
     @preconcurrency
-    public func constructAsync<T: Sendable>(_ body: @Sendable @escaping (Resolver) throws -> T) async throws -> T {
+    public func constructAsync<T>(_ body: @Sendable @escaping (Resolver) throws -> T) async throws -> sending T {
         return try await factories.usingAsync { factoriesUnwrapped in
             let resolver = SimpleResolver(container: self, factories: factoriesUnwrapped)
             let result = try body(resolver)

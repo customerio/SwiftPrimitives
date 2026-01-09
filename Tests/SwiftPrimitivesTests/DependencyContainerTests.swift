@@ -45,7 +45,7 @@ struct DependencyContainerTests {
             .register { _ in 42 }
             .build()
         
-        await container.register(singleton: "UpdatedString")
+        container.register(singleton: "UpdatedString")
         
         let string: String = try container.resolve()
         #expect(string == "UpdatedString")
@@ -121,7 +121,7 @@ struct DependencyContainerTests {
         let _: InitCounter = try container.resolve()
         #expect(InitCounter.initCount == 2)
         
-        await container.register(singleton: instance1)
+        container.register(singleton: instance1)
         
         let _: InitCounter = try container.resolve()
         #expect(InitCounter.initCount == 2)

@@ -36,14 +36,12 @@ public final class Synchronized<T>: @unchecked Sendable {
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func mutatingAsync<Result: Sendable>(_ body: @Sendable @escaping (inout T) throws -> Result) async throws -> Result {
+    public func mutatingAsync<Result>(_ body: @Sendable @escaping (inout T) throws -> Result) async throws -> sending Result {
         try await withCheckedThrowingContinuation { continuation in
             syncQueue.async(flags: .barrier) {
                 do {
                     let result = Swift.Result(catching: { try body(&self._wrappedValue) })
-                    Task {
-                        continuation.resume(with: result)
-                    }
+                    continuation.resume(with: result)
                 }
             }
         }
@@ -51,13 +49,11 @@ public final class Synchronized<T>: @unchecked Sendable {
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func mutatingAsync<Result: Sendable>(_ body: @Sendable @escaping (inout T) -> Result) async -> Result {
+    public func mutatingAsync<Result>(_ body: @Sendable @escaping (inout T) -> Result) async -> sending Result {
         await withCheckedContinuation { continuation in
             syncQueue.async(flags: .barrier) {
                 let result = body(&self._wrappedValue)
-                Task {
-                    continuation.resume(returning: result)
-                }
+                continuation.resume(returning: result)
             }
         }
     }
@@ -73,29 +69,30 @@ public final class Synchronized<T>: @unchecked Sendable {
 
     /// Access the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func usingAsync<Result: Sendable>(_ body: @Sendable @escaping (T) throws -> Result) async throws -> Result {
+    public func usingAsync<Result>(_ body: @Sendable @escaping (T) throws -> Result) async throws -> sending Result {
         try await withCheckedThrowingContinuation { continuation in
             syncQueue.async {
-                let result: Swift.Result<Result, any Error> = Swift.Result(catching: { try body(self._wrappedValue) })
-                
-                Task {
-                    continuation.resume(with: result)
+                let result = Swift.Result {
+                    try body(self._wrappedValue)
                 }
+                continuation.resume(with: result)
             }
         }
     }
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func usingAsync<Result: Sendable>(_ body: @Sendable @escaping (T) -> Result) async -> Result {
-        await withCheckedContinuation { continuation in
+    public func usingAsync<Result>(_ body: @Sendable @escaping (T) -> Result) async -> sending Result {
+        let wrapped = await withCheckedContinuation { continuation in
             syncQueue.async {
                 let result = body(self._wrappedValue)
+                let wrappedResult: Synchronized<Result> = .init(result)
                 Task {
-                    continuation.resume(returning: result)
+                    continuation.resume(returning: wrappedResult)
                 }
             }
         }
+        return wrapped.wrappedValue
     }
 }
 
