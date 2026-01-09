@@ -1,7 +1,12 @@
 import Foundation
 import Logging
 
-public final class CommonEventBus: Sendable {
+public protocol EventBus {
+    func registerObserver<EventType: Sendable>(listener: @Sendable @escaping (EventType) -> Void) -> RegistrationToken<UUID>
+    func post(_ event: any Sendable)
+}
+
+public final class CommonEventBus: Sendable, EventBus {
         
     private class NotifyOperation: Operation, @unchecked Sendable {
         let wasHandled: Synchronized<Bool?> = .init(nil)
@@ -45,9 +50,9 @@ public final class CommonEventBus: Sendable {
         self.logger = logger
     }
     
-//    public init(resolver: Resolver) throws {
-//        logger = try resolver.resolve()
-//    }
+    public init(resolver: Resolver) throws {
+        logger = try resolver.resolve()
+    }
     
     public func registerObserver<EventType: Sendable>(listener: @Sendable @escaping (EventType) -> Void) -> RegistrationToken<UUID> {
         let identifier = UUID()
