@@ -1,0 +1,29 @@
+name: Swift Tests on Linux
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+    build-and-test-linux:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v3
+
+            - name: Set up Swift
+              uses: actions/setup-swift@v3
+              with:
+                  swift-version: '6.2'
+            - name: Verify Swift version
+              run: swift --version
+
+            - name: Build project
+              run: swift build --configuration release
+
+            - name: Run tests
+              run: swift test --configuration release --enable-code-coverage
