@@ -5,4 +5,3 @@ extension Data: Commutable {
         return .data(self)
     }
 }
-

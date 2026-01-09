@@ -6,17 +6,17 @@ import PackageDescription
 let package = Package(
     name: "SwiftPrimitives",
     platforms: [
-            .macOS(.v10_15),   // macOS Catalina or later
-            .iOS(.v13),        // iOS 13 or later
-            .tvOS(.v13),       // tvOS 13 or later
-            .watchOS(.v6)      // watchOS 6 or later
-        ],
+        .macOS(.v10_15),  // macOS Catalina or later
+        .iOS(.v13),  // iOS 13 or later
+        .tvOS(.v13),  // tvOS 13 or later
+        .watchOS(.v6),  // watchOS 6 or later
+    ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "SwiftPrimitives",
             targets: ["SwiftPrimitives"],
-        ),
+        )
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.0")

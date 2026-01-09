@@ -36,7 +36,7 @@ extension Commuted: Codable {
             try container.encode(value)
         }
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
@@ -102,11 +102,11 @@ extension Commuted: Equatable {
             return false
         }
     }
-    
+
     public static func == (lhs: Commuted, rhs: Commutable) -> Bool {
         return lhs == rhs.commute()
     }
-    
+
     public static func != (lhs: Commuted, rhs: Commutable) -> Bool {
         return lhs != rhs.commute()
     }

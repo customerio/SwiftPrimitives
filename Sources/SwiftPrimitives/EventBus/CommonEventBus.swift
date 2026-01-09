@@ -7,10 +7,10 @@ public protocol EventBus {
 }
 
 public final class CommonEventBus: Sendable, EventBus {
-        
+
     private class NotifyOperation: Operation, @unchecked Sendable {
         let wasHandled: Synchronized<Bool?> = .init(nil)
-        
+
         let event: any Sendable
         let listener: (any Sendable) -> Bool
         init(event: any Sendable, listener: @escaping (any Sendable) -> Bool) {
@@ -21,7 +21,7 @@ public final class CommonEventBus: Sendable, EventBus {
             wasHandled.wrappedValue = listener(event)
         }
     }
-    
+
     /// Protocol to classify system messages.
     public protocol SystemMessage: Sendable { }
 
@@ -39,21 +39,21 @@ public final class CommonEventBus: Sendable, EventBus {
         public var handledType: Any.Type
         public var listener: @Sendable (Any) -> Bool
     }
-    
+
     private let notifiyQueue = OperationQueue()
-    
+
     private let observers: Synchronized<[UUID: (Any) -> Bool]> = Synchronized([:])
-    
+
     private let logger: Logger
-    
+
     public init(logger: Logger) {
         self.logger = logger
     }
-    
+
     public init(resolver: Resolver) throws {
         logger = try resolver.resolve()
     }
-    
+
     public func registerObserver<EventType: Sendable>(listener: @Sendable @escaping (EventType) -> Void) -> RegistrationToken<UUID> {
         let identifier = UUID()
         let token = BlockRegistrationToken(identifier: identifier) { [weak self] in
@@ -80,28 +80,28 @@ public final class CommonEventBus: Sendable, EventBus {
         ))
         return token
     }
-    
+
     private func removeRegistration(for identifier: UUID) {
         observers.removeValue(forKey: identifier)
         logger.debug("Registration removed for identifier \(identifier).")
     }
-    
+
     public func post(_ event: any Sendable) {
         let eventTypeName = String(describing: type(of: event))
         let arrivalTime = Date()
-        
+
         logger.debug("Beginning post for event of type \(eventTypeName)")
         // Fetch the observers synchronously now in case they change before enqueuing the callbacks
         let snapshot = observers.wrappedValue.values
         guard !snapshot.isEmpty else {
             logger.debug("No observers are registered for any events, so aborting delivery.")
             return
-            
+
         }
         // Notifications delivery queuing happens in the background
         Task {
             let ops = snapshot.map { NotifyOperation(event: event, listener: $0) }
-            
+
             // Don't post delivery summaries for SystemMessages to avoid recursion
             if !(event is SystemMessage) {
                 let sendSummaryOperation = BlockOperation { [weak self] in
@@ -132,15 +132,15 @@ public final class CommonEventBus: Sendable, EventBus {
             self.logger.debug("Completed queuing post for event of type \(eventTypeName) to \(snapshot.count) potential listeners.")
         }
     }
-    
+
     public func postAndWait(_ event: any Sendable) async -> DeliverySummary {
         let arrivalTime = Date()
         let eventTypeName = String(describing: type(of: event))
         logger.debug("Beginning postAndWait for event of type \(eventTypeName)")
-        
+
         // Fetch the observers synchronously now in case they change before enqueuing the callbacks
         let snapshot = observers.wrappedValue.values
-        
+
         return await withCheckedContinuation { continuation in
             var handledEvents: Int = 0
             for observer in snapshot {
@@ -158,4 +158,3 @@ public final class CommonEventBus: Sendable, EventBus {
         }
     }
 }
-

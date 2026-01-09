@@ -1,4 +1,3 @@
-
 extension Int: Commutable {
     public func commute() -> Commuted {
         return .int(Int64(self))

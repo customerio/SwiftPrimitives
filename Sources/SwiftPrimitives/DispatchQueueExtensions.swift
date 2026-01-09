@@ -11,7 +11,7 @@ extension DispatchQueue {
             }
         }
     }
-    
+
     func await<T>(_ body: @escaping () -> T) async -> sending T {
         let box = Synchronized(body)
         return await withCheckedContinuation { continuation in

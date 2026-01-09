@@ -1,4 +1,3 @@
-
 extension Float: Commutable {
     public func commute() -> Commuted {
         Float64(self).commute()

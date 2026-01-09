@@ -5,4 +5,3 @@ extension String: Commutable {
         return .string(self)
     }
 }
-

@@ -1,9 +1,9 @@
-//import Foundation
-//import Testing
+// import Foundation
+// import Testing
 //
-//import SwiftPrimitives
+// import SwiftPrimitives
 //
-//struct StandardLoggerTests {
+// struct StandardLoggerTests {
 //
 //    @Test
 //    func testLogLevelNoneWithoutTags() {
@@ -282,5 +282,5 @@
 //        )))
 //        #expect(outputter.firstErrorMessage?.content == errorMessage)
 //    }
-//}
+// }
 //
