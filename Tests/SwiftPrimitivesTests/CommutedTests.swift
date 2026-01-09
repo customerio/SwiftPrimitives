@@ -6,9 +6,8 @@
 //
 
 import Foundation
-import Testing
-
 import SwiftPrimitives
+import Testing
 
 struct CommutedTests {
 
@@ -123,13 +122,13 @@ struct CommutedTests {
         let initial = [
             "first": 1,
             "second": 2,
-            "third": 3
+            "third": 3,
         ]
         let more = [
             "first": 1,
             "second": 2,
             "third": 3,
-            "fourth": 4
+            "fourth": 4,
         ]
         let first = initial.commute()
         let second = Commuted.object(initial.mapValues { $0.commute() })
@@ -255,7 +254,10 @@ struct CommutedTests {
         #expect(expected == stringResult)
     }
 
-    @Test(arguments: zip([0 as Float, 1, 19.5, -2_000_000, Float.nan, Float.infinity], [ "0", "1", "19.5", "-2000000", "null", "null"]))
+    @Test(
+        arguments: zip(
+            [0 as Float, 1, 19.5, -2_000_000, Float.nan, Float.infinity],
+            ["0", "1", "19.5", "-2000000", "null", "null"]))
     func testJsonEncodeFloat(input: Float, expected: String) throws {
         let commuted = input.commute()
 
@@ -266,7 +268,10 @@ struct CommutedTests {
         #expect(expected == stringResult)
     }
 
-    @Test(arguments: zip([0, 1, 19.5, -2_000_000, Double.nan, Double.infinity], [ "0", "1", "19.5", "-2000000", "null", "null"]))
+    @Test(
+        arguments: zip(
+            [0, 1, 19.5, -2_000_000, Double.nan, Double.infinity],
+            ["0", "1", "19.5", "-2000000", "null", "null"]))
     func testJsonEncodeDouble(input: Double, expected: String) throws {
         let commuted = input.commute()
 
@@ -277,7 +282,10 @@ struct CommutedTests {
         #expect(expected == stringResult)
     }
 
-    @Test(arguments: zip([1767225600, 1000212360], ["\"2026-01-01T00:00:00Z\"", "\"2001-09-11T12:46:00Z\""]))
+    @Test(
+        arguments: zip(
+            [1_767_225_600, 1_000_212_360],
+            ["\"2026-01-01T00:00:00Z\"", "\"2001-09-11T12:46:00Z\""]))
     func testJsonEncodeDate(input: TimeInterval, expected: String) throws {
 
         // Swift Date(timeIntervalSince1970: _) uses local time.
@@ -285,7 +293,7 @@ struct CommutedTests {
         // To ensure tests pass no matter where they are run, we
         // convert the epoch timestamps relative to the Swift
         // Reference Date of 2001-01-01 at Midnight UTC.
-        let EpochOffset: TimeInterval = 978307200
+        let EpochOffset: TimeInterval = 978_307_200
         let date = Date(timeIntervalSinceReferenceDate: input - EpochOffset)
         let commuted = date.commute()
 
@@ -297,7 +305,9 @@ struct CommutedTests {
         #expect(expected == stringResult)
     }
 
-    @Test(arguments: zip(["first", "", "😄", "\"Quoted\""], [ "\"first\"", "\"\"", "\"😄\"", "\"\\\"Quoted\\\"\""]))
+    @Test(
+        arguments: zip(
+            ["first", "", "😄", "\"Quoted\""], ["\"first\"", "\"\"", "\"😄\"", "\"\\\"Quoted\\\"\""]))
     func testJsonEncodeString(input: String, expected: String) throws {
         let commuted = input.commute()
 
@@ -308,7 +318,12 @@ struct CommutedTests {
         #expect(expected == stringResult)
     }
 
-    @Test(arguments: zip([[1, 2, 3] as [Sendable & Commutable], ["first", "second"] as [Sendable & Commutable]], ["[1,2,3]", "[\"first\",\"second\"]"]))
+    @Test(
+        arguments: zip(
+            [
+                [1, 2, 3] as [Sendable & Commutable],
+                ["first", "second"] as [Sendable & Commutable],
+            ], ["[1,2,3]", "[\"first\",\"second\"]"]))
     func testJsonEncodeArray(input: [Sendable & Commutable], expected: String) throws {
         // We have to remove the Sendable property before we can call `commute()`
         let commuted = input.map { $0 as Commutable }.commute()
@@ -320,15 +335,18 @@ struct CommutedTests {
         #expect(expected == stringResult)
     }
 
-    @Test(arguments: zip([
-        ["number": 1] as [String: Sendable & Commutable],
-        ["string": "hello"] as [String: Sendable & Commutable],
-        ["array": [1, 2, 3]] as [String: Sendable & Commutable]
-    ], [
-        "{\"number\":1}",
-        "{\"string\":\"hello\"}",
-        "{\"array\":[1,2,3]}"
-    ]))
+    @Test(
+        arguments: zip(
+            [
+                ["number": 1] as [String: Sendable & Commutable],
+                ["string": "hello"] as [String: Sendable & Commutable],
+                ["array": [1, 2, 3]] as [String: Sendable & Commutable],
+            ],
+            [
+                "{\"number\":1}",
+                "{\"string\":\"hello\"}",
+                "{\"array\":[1,2,3]}",
+            ]))
     func testJsonEncodeDictionary(input: [String: Sendable & Commutable], expected: String) throws {
         // We have to remove the Sendable property before we can call `commute()`
         let commuted = input.mapValues { $0 as Commutable }.commute()
@@ -374,7 +392,9 @@ struct CommutedTests {
         #expect(expected.commute() == result)
     }
 
-    @Test(arguments: zip([ "\"first\"", "\"\"", "\"😄\"", "\"\\\"Quoted\\\"\""], ["first", "", "😄", "\"Quoted\""]))
+    @Test(
+        arguments: zip(
+            ["\"first\"", "\"\"", "\"😄\"", "\"\\\"Quoted\\\"\""], ["first", "", "😄", "\"Quoted\""]))
     func testJsonDecodeString(input: String, expected: String) throws {
         let decoder = JSONDecoder()
         // All Numeric values get parsed as dates if no dateDecodingStrategy is set
@@ -385,7 +405,10 @@ struct CommutedTests {
         #expect(expected.commute() == result)
     }
 
-    @Test(arguments: zip(["\"2026-01-01T00:00:00Z\"", "\"2001-09-11T12:46:00Z\""], [1767225600, 1000212360]))
+    @Test(
+        arguments: zip(
+            ["\"2026-01-01T00:00:00Z\"", "\"2001-09-11T12:46:00Z\""],
+            [1_767_225_600, 1_000_212_360]))
     func testJsonDecodeDate(input: String, expected: TimeInterval) throws {
 
         // Swift Date(timeIntervalSince1970: _) uses local time.
@@ -393,7 +416,7 @@ struct CommutedTests {
         // To ensure tests pass no matter where they are run, we
         // convert the epoch timestamps relative to the Swift
         // Reference Date of 2001-01-01 at Midnight UTC.
-        let EpochOffset: TimeInterval = 978307200
+        let EpochOffset: TimeInterval = 978_307_200
         let date = Date(timeIntervalSinceReferenceDate: expected - EpochOffset)
 
         let decoder = JSONDecoder()
@@ -405,7 +428,13 @@ struct CommutedTests {
         #expect(date.commute() == result)
     }
 
-    @Test(arguments: zip( ["[1,2,3]", "[\"first\",\"second\"]"], [[1, 2, 3] as [Sendable & Commutable], ["first", "second"] as [Sendable & Commutable]]))
+    @Test(
+        arguments: zip(
+            ["[1,2,3]", "[\"first\",\"second\"]"],
+            [
+                [1, 2, 3] as [Sendable & Commutable],
+                ["first", "second"] as [Sendable & Commutable],
+            ]))
     func testJsonDecodeArray(input: String, expected: [Sendable & Commutable]) throws {
         // We have to remove the Sendable property before we can call `commute()`
         let commuted = expected.map { $0 as Commutable }.commute()
@@ -419,15 +448,18 @@ struct CommutedTests {
         #expect(commuted == result)
     }
 
-    @Test(arguments: zip([
-        "{\"number\":1}",
-        "{\"string\":\"hello\"}",
-        "{\"array\":[1,2,3], \"null\": null}"
-    ], [
-        ["number": 1] as [String: Sendable & Commutable],
-        ["string": "hello"] as [String: Sendable & Commutable],
-        ["array": [1, 2, 3], "null": nil] as [String: Sendable & Commutable]
-    ]))
+    @Test(
+        arguments: zip(
+            [
+                "{\"number\":1}",
+                "{\"string\":\"hello\"}",
+                "{\"array\":[1,2,3], \"null\": null}",
+            ],
+            [
+                ["number": 1] as [String: Sendable & Commutable],
+                ["string": "hello"] as [String: Sendable & Commutable],
+                ["array": [1, 2, 3], "null": nil] as [String: Sendable & Commutable],
+            ]))
     func testJsonDecodeObject(input: String, expected: [String: Sendable & Commutable]) throws {
         // We have to remove the Sendable property before we can call `commute()`
         let commuted = expected.mapValues { $0 as Commutable }.commute()
@@ -442,13 +474,14 @@ struct CommutedTests {
     }
 
     public static func plistWrapper(content: String) -> Data {
-        let xmlHeader = """
+        let xmlHeader =
+            """
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
-        """
-        let xmlFooter = "</plist>"
-        let fullString = xmlHeader + content + xmlFooter
+            """
+        let xmlFooter = "</plist>\n"
+        let fullString = xmlHeader + "\n" + content + "\n" + xmlFooter
         return fullString.data(using: .utf8, allowLossyConversion: false)!
     }
 
@@ -467,8 +500,9 @@ struct CommutedTests {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .xml
         let data = try encoder.encode(["null": nil] as [String: String?])
-        let string = String(data: data, encoding: .utf8)!
-        print(string)
+        let expected = Self.plistWrapper(
+            content: "<dict>\n\t<key>null</key>\n\t<string>$null</string>\n</dict>")
+        #expect(data == expected)
     }
 
 }

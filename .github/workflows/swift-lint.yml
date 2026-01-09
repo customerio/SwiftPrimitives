@@ -15,14 +15,11 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v3
 
-            - name: Set up Swift
-              uses: swift-actions/setup-swift@v3
+            - name: GitHub Action for SwiftLint
+              uses: realm/SwiftLint@0.54.0
               with:
-                swift-version: '6.2.3'
-                skip-verify-signature: true
+                # This ensures it only lints files changed in the PR
+                args: --strict --reporter github-actions-logging
+              env:
+                DIFF_BASE: ${{ github.base_ref }}
 
-            - name: Verify Swift version
-              run: swift --version
-
-            - name: Run SwiftLint
-              run: swiftlint lint --strict
