@@ -40,12 +40,18 @@ public final class DependencyContainer: Sendable {
 
             if let autoresolvable = T.self as? Autoresolvable.Type {
                 let instance = try autoresolvable.init(resolver: self)
-                return instance as! T
+                guard let result = instance as? T else {
+                    throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: instance))
+                }
+                return result
             }
 
             if let defaultInit = T.self as? DefaultInitializable.Type {
                 let instance = defaultInit.init()
-                return instance as! T
+                guard let result = instance as? T else {
+                    throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: instance))
+                }
+                return result
             }
 
             throw ResolutionError.notFound

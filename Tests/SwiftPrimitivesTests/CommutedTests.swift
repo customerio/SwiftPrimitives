@@ -87,8 +87,8 @@ struct CommutedTests {
 
     @Test
     func testEquatableData() async throws {
-        let initial = "Hello".data(using: .utf8)!
-        let more = "Hello World".data(using: .utf8)!
+        let initial = Data("Hello".utf8)
+        let more = Data("Hello World".utf8)
         let first = initial.commute()
         let second = Commuted.data(initial)
         let third = Commuted.data(more)
