@@ -3,25 +3,23 @@ import Foundation
 
 /// A wrapper for primitive types to make them thread safe and able to conform to `Sendable`.
 public final class Synchronized<T>: @unchecked Sendable {
-    public let syncQueue: DispatchQueue
+    private let lock = NSRecursiveLock()
     private var _wrappedValue: T
     public var wrappedValue: T {
         get {
-            syncQueue.sync { _wrappedValue }
+            lock.withLock {
+                _wrappedValue
+            }
         }
         set {
-            syncQueue.sync(flags: .barrier) {
+            lock.withLock {
                 _wrappedValue = newValue
             }
         }
     }
 
-    public init(_ initial: T, allowConcurrentReads: Bool = true) {
+    public init(_ initial: T) {
         self._wrappedValue = initial
-        self.syncQueue = DispatchQueue(
-            label: "Synchronized \(String(describing: T.self))",
-            attributes: allowConcurrentReads ? .concurrent : []
-        )
     }
 
     /// Modify the wrapped value in a thread-safe manor.
@@ -29,75 +27,75 @@ public final class Synchronized<T>: @unchecked Sendable {
     /// - body: The critical section of code that may modify the wrapped value.
     /// - Returns: The value returned from the inner function.
     public func mutating<Result>(_ body: (inout T) throws -> Result) rethrows -> Result {
-        try syncQueue.sync(flags: .barrier) {
+        try lock.withLock {
             try body(&_wrappedValue)
         }
     }
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func mutatingAsync<Result>(_ body: @Sendable @escaping (inout T) throws -> Result) async throws -> sending Result {
-        try await withCheckedThrowingContinuation { continuation in
-            syncQueue.async(flags: .barrier) {
-                do {
-                    let result = Swift.Result(catching: { try body(&self._wrappedValue) })
-                    continuation.resume(with: result)
-                }
+    public func mutatingAsync<Result: Sendable>(
+        _ body: sending @escaping (inout T) throws -> sending Result
+    ) async throws -> Result {
+        let task = Task.detached {
+            try self.lock.withLock {
+                try body(&self._wrappedValue)
             }
         }
+        return try await task.value
     }
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func mutatingAsync<Result>(_ body: @Sendable @escaping (inout T) -> Result) async -> sending Result {
-        await withCheckedContinuation { continuation in
-            syncQueue.async(flags: .barrier) {
-                let result = body(&self._wrappedValue)
-                continuation.resume(returning: result)
+    public func mutatingAsync<Result: Sendable>(
+        _ body: sending @escaping (inout T) -> sending Result
+    ) async -> sending Result {
+        let task = Task.detached {
+            self.lock.withLock {
+                body(&self._wrappedValue)
             }
         }
+        return await task.value
     }
 
     /// Access the wrapped value in a thread-safe manor.
     /// - Parameters:
     ///  - body: The code to access the wrapped value. The return value is passed through and returned to the caller, leaving the original value unchanged.
     public func using<Result>(_ body: (T) throws -> Result) rethrows -> Result {
-        try syncQueue.sync {
+        try lock.withLock {
             try body(_wrappedValue)
         }
     }
 
     /// Access the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func usingAsync<Result>(_ body: @Sendable @escaping (T) throws -> Result) async throws -> sending Result {
-        try await withCheckedThrowingContinuation { continuation in
-            syncQueue.async {
-                let result = Swift.Result {
-                    try body(self._wrappedValue)
-                }
-                continuation.resume(with: result)
+    public func usingAsync<Result: Sendable>(
+        _ body: sending @escaping (T) throws -> sending Result
+    ) async throws -> sending Result {
+        let task = Task.detached {
+            try self.lock.withLock {
+                try body(self._wrappedValue)
             }
         }
+        return try await task.value
     }
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func usingAsync<Result>(_ body: @Sendable @escaping (T) -> Result) async -> sending Result {
-        let wrapped = await withCheckedContinuation { continuation in
-            syncQueue.async {
-                let result = body(self._wrappedValue)
-                let wrappedResult: Synchronized<Result> = .init(result)
-                Task {
-                    continuation.resume(returning: wrappedResult)
-                }
+    public func usingAsync<Result: Sendable>(
+        _ body: sending @escaping (T) -> sending Result
+    ) async -> sending Result {
+        let task = Task.detached {
+            self.lock.withLock {
+                body(self._wrappedValue)
             }
         }
-        return wrapped.wrappedValue
+        return await task.value
     }
 }
 
-public extension Synchronized where T == Bool {
-    func toggle() {
+extension Synchronized where T == Bool {
+    public func toggle() {
         mutating { value in
             value.toggle()
         }
@@ -170,26 +168,26 @@ extension Synchronized: Comparable where T: Comparable {
     }
 }
 
-public extension Synchronized where T: Comparable {
-    static func < (lhs: Synchronized<T>, rhs: T) -> Bool {
+extension Synchronized where T: Comparable {
+    public static func < (lhs: Synchronized<T>, rhs: T) -> Bool {
         lhs.using { lhsValue in
             lhsValue < rhs
         }
     }
 
-    static func <= (lhs: Synchronized<T>, rhs: T) -> Bool {
+    public static func <= (lhs: Synchronized<T>, rhs: T) -> Bool {
         lhs.using { lhsValue in
             lhsValue <= rhs
         }
     }
 
-    static func > (lhs: Synchronized<T>, rhs: T) -> Bool {
+    public static func > (lhs: Synchronized<T>, rhs: T) -> Bool {
         lhs.using { lhsValue in
             lhsValue > rhs
         }
     }
 
-    static func >= (lhs: Synchronized<T>, rhs: T) -> Bool {
+    public static func >= (lhs: Synchronized<T>, rhs: T) -> Bool {
         lhs.using { lhsValue in
             lhsValue >= rhs
         }
@@ -204,8 +202,8 @@ extension Synchronized: Hashable where T: Hashable {
     }
 }
 
-public extension Synchronized where T: AdditiveArithmetic {
-    static func + (lhs: Synchronized<T>, rhs: Synchronized<T>) -> T {
+extension Synchronized where T: AdditiveArithmetic {
+    public static func + (lhs: Synchronized<T>, rhs: Synchronized<T>) -> T {
         guard lhs !== rhs else {
             return lhs.using { value in
                 value + value
@@ -219,13 +217,13 @@ public extension Synchronized where T: AdditiveArithmetic {
         }
     }
 
-    static func + (lhs: Synchronized<T>, rhs: T) -> T {
+    public static func + (lhs: Synchronized<T>, rhs: T) -> T {
         lhs.using { lhsValue in
             lhsValue + rhs
         }
     }
 
-    static func - (lhs: Synchronized<T>, rhs: Synchronized<T>) -> T {
+    public static func - (lhs: Synchronized<T>, rhs: Synchronized<T>) -> T {
         guard lhs !== rhs else { return .zero }
 
         return lhs.using { lhsValue in
@@ -235,13 +233,13 @@ public extension Synchronized where T: AdditiveArithmetic {
         }
     }
 
-    static func - (lhs: Synchronized<T>, rhs: T) -> T {
+    public static func - (lhs: Synchronized<T>, rhs: T) -> T {
         lhs.using { lhsValue in
             lhsValue - rhs
         }
     }
 
-    static func += (lhs: Synchronized<T>, rhs: Synchronized<T>) {
+    public static func += (lhs: Synchronized<T>, rhs: Synchronized<T>) {
         guard lhs !== rhs else {
             lhs.mutating { value in
                 value += value
@@ -255,13 +253,13 @@ public extension Synchronized where T: AdditiveArithmetic {
         }
     }
 
-    static func += (lhs: Synchronized<T>, rhs: T) {
+    public static func += (lhs: Synchronized<T>, rhs: T) {
         lhs.mutating { lhsValue in
             lhsValue += rhs
         }
     }
 
-    static func -= (lhs: Synchronized<T>, rhs: Synchronized<T>) {
+    public static func -= (lhs: Synchronized<T>, rhs: Synchronized<T>) {
         guard lhs !== rhs else {
             lhs.wrappedValue = .zero
             return
@@ -274,7 +272,7 @@ public extension Synchronized where T: AdditiveArithmetic {
         }
     }
 
-    static func -= (lhs: Synchronized<T>, rhs: T) {
+    public static func -= (lhs: Synchronized<T>, rhs: T) {
         lhs.mutating { lhsValue in
             lhsValue -= rhs
         }
@@ -318,18 +316,18 @@ extension Synchronized: DictionaryProtocol where T: DictionaryProtocol {
     }
 }
 
-public extension Synchronized where T: Collection {
-    var count: Int {
+extension Synchronized where T: Collection {
+    public var count: Int {
         using { value in value.count }
     }
 
-    var isEmpty: Bool {
+    public var isEmpty: Bool {
         using { value in value.isEmpty }
     }
 }
 
-public extension Synchronized where T: MutableCollection {
-    subscript(position: T.Index) -> T.Element {
+extension Synchronized where T: MutableCollection {
+    public subscript(position: T.Index) -> T.Element {
         get {
             using { value in
                 value[position]
@@ -343,40 +341,42 @@ public extension Synchronized where T: MutableCollection {
     }
 }
 
-public extension Synchronized where T: RangeReplaceableCollection {
-    static func += <S>(lhs: Synchronized<T>, rhs: S) where S: Sequence, T.Element == S.Element {
+extension Synchronized where T: RangeReplaceableCollection {
+    public static func += <S>(lhs: Synchronized<T>, rhs: S)
+    where S: Sequence, T.Element == S.Element {
         lhs.append(contentsOf: rhs)
     }
 
-    static func += (lhs: Synchronized<T>, rhs: T.Element) {
+    public static func += (lhs: Synchronized<T>, rhs: T.Element) {
         lhs.append(rhs)
     }
 
-    func append(_ newElement: T.Element) {
+    public func append(_ newElement: T.Element) {
         mutating { value in
             value.append(newElement)
         }
     }
 
-    func append<S>(contentsOf newElements: S) where S: Sequence, T.Element == S.Element {
+    public func append<S>(contentsOf newElements: S) where S: Sequence, T.Element == S.Element {
         mutating { value in
             value.append(contentsOf: newElements)
         }
     }
 
-    func insert(_ newElement: T.Element, at i: T.Index) {
+    public func insert(_ newElement: T.Element, at i: T.Index) {
         mutating { value in
             value.insert(newElement, at: i)
         }
     }
 
-    func insert<S>(contentsOf newElements: S, at i: T.Index) where S: Collection, T.Element == S.Element {
+    public func insert<S>(contentsOf newElements: S, at i: T.Index)
+    where S: Collection, T.Element == S.Element {
         mutating { value in
             value.insert(contentsOf: newElements, at: i)
         }
     }
 
-    func removeAll(keepingCapacity keepCapacity: Bool = false) {
+    public func removeAll(keepingCapacity keepCapacity: Bool = false) {
         mutating { value in
             value.removeAll(keepingCapacity: keepCapacity)
         }
