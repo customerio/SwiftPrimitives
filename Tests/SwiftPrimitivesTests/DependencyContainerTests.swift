@@ -57,7 +57,7 @@ struct DependencyContainerTests {
 
         struct MyDefaultInitializable: DefaultInitializable {}
         struct MyAutoResolvable: Autoresolvable {
-            init(resolver: any Resolver) throws {}
+            init(resolver: borrowing any Resolver) throws {}
         }
 
         let container: DependencyContainer = DependencyContainer.Builder().build()
@@ -124,40 +124,4 @@ struct DependencyContainerTests {
         let _: InitCounter = try await container.resolve()
         #expect(InitCounter.initCount == 2)
     }
-
-    @Test
-    func testFailsAfterExpiration() async throws {
-
-        struct MyAutoResolvable: Autoresolvable {
-            static let savedResolver: Synchronized<Resolver?> = .init(nil)
-            var myString: String
-            init(resolver: any Resolver) throws {
-                Self.savedResolver.wrappedValue = resolver
-                myString = try resolver.resolve()
-            }
-        }
-
-        let container: DependencyContainer = DependencyContainer.Builder()
-            .register(singleton: "TestString")
-            .register { _ in 42 }
-            .build()
-
-        #expect(MyAutoResolvable.savedResolver.wrappedValue == nil)
-        let _: MyAutoResolvable = try await container.resolve()
-        #expect(MyAutoResolvable.savedResolver.wrappedValue != nil)
-
-        do {
-
-            let _: String = try MyAutoResolvable.savedResolver.wrappedValue!.resolve()
-
-            Issue.record("Expected an error to be thrown")
-        } catch let error as DependencyContainer.ResolutionError {
-            if case DependencyContainer.ResolutionError.expired = error {
-                // Expected error
-            } else {
-                Issue.record("Wrong error type thrown")
-            }
-        }
-    }
-
 }

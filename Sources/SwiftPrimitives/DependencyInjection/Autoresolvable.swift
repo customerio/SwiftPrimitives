@@ -6,5 +6,5 @@
 //
 
 public protocol Autoresolvable: Sendable {
-    init(resolver: borrowing Resolver) throws
+    init(resolver: borrowing any Resolver) throws
 }

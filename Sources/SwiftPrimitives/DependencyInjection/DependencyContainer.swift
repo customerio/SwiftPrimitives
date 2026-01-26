@@ -3,8 +3,8 @@ public actor DependencyContainer {
 
     private static func makeSingletonFactory<T: Sendable>(
         as type: T.Type = T.self,
-        factory: @Sendable @escaping (Resolver) throws -> T
-    ) -> @Sendable (Resolver) throws -> sending T {
+        factory: @Sendable @escaping (borrowing any Resolver) throws -> T
+    ) -> @Sendable (borrowing any Resolver) throws -> sending T {
         let instance: Synchronized<T?> = Synchronized(nil)
         return { resolver in
             try instance.mutating { value in
@@ -33,11 +33,12 @@ public actor DependencyContainer {
     private struct SimpleResolver: Resolver {
 
         public let container: DependencyContainer
-        private let factories: [ObjectIdentifier: @Sendable (Resolver) throws -> sending Any]
+        private let factories:
+            [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
 
         init(
             container: DependencyContainer,
-            factories: [ObjectIdentifier: @Sendable (Resolver) throws -> sending Any]
+            factories: [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
         ) {
             self.container = container
             self.factories = factories
@@ -76,14 +77,15 @@ public actor DependencyContainer {
 
     /// The intended way to construct a DependencyContainer.
     public struct Builder {
-        private let factories: [ObjectIdentifier: @Sendable (Resolver) throws -> sending Any]
+        private let factories:
+            [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
 
         public init() {
             self.factories = [:]
         }
 
         private init(
-            factories: [ObjectIdentifier: @Sendable (Resolver) throws -> sending Any]
+            factories: [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
         ) {
             self.factories = factories
         }
@@ -91,7 +93,8 @@ public actor DependencyContainer {
         /// Registers a closure to be invoked to create objects when the provided type is resolved.
         /// A new object is generated for each request.
         public func register<T>(
-            as type: T.Type = T.self, factory: @Sendable @escaping (Resolver) throws -> sending T
+            as type: T.Type = T.self,
+            factory: @Sendable @escaping (borrowing any Resolver) throws -> sending T
         ) -> Self {
             var factories = self.factories
             let id = ObjectIdentifier(type)
@@ -108,7 +111,7 @@ public actor DependencyContainer {
         /// same object will be returned from all subsequent requests.
         public func registerLazySingleton<T: Sendable>(
             as type: T.Type = T.self,
-            factory: @Sendable @escaping (Resolver) throws -> T
+            factory: @Sendable @escaping (borrowing any Resolver) throws -> T
         ) -> Self {
             return register(
                 as: type,
@@ -123,16 +126,20 @@ public actor DependencyContainer {
         }
     }
 
-    private var factories: [ObjectIdentifier: @Sendable (Resolver) throws -> sending Any]
+    private var factories:
+        [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
 
-    private init(factories: [ObjectIdentifier: @Sendable (Resolver) throws -> sending Any]) {
+    private init(
+        factories: [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
+    ) {
         self.factories = factories
     }
 
     /// Registers a closure to be invoked to create objects when the provided type is resolved.
     /// A new object is generated for each request.
     public func register<T>(
-        as type: T.Type = T.self, factory: @Sendable @escaping (Resolver) throws -> sending T
+        as type: T.Type = T.self,
+        factory: @Sendable @escaping (borrowing any Resolver) throws -> sending T
     ) {
         let id = ObjectIdentifier(type)
         factories[id] = factory
@@ -146,7 +153,7 @@ public actor DependencyContainer {
     /// same object will be returned from all subsequent requests.
     public func registerLazySingleton<T: Sendable>(
         as type: T.Type = T.self,
-        factory: @Sendable @escaping (Resolver) throws -> T
+        factory: @Sendable @escaping (borrowing any Resolver) throws -> T
     ) {
         register(
             as: type,
@@ -154,7 +161,9 @@ public actor DependencyContainer {
         )
     }
     /// Construct an object using the dependency container to resolve dependencies within the provided closure.
-    public func construct<T>(_ body: (Resolver) throws -> sending T) rethrows -> sending T {
+    public func construct<T>(_ body: (borrowing any Resolver) throws -> sending T) rethrows
+        -> sending T
+    {
         let resolver = SimpleResolver(container: self, factories: factories)
         let result = try body(resolver)
         return result
