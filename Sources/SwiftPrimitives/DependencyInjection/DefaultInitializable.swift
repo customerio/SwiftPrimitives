@@ -5,6 +5,6 @@
 //  Created by Holly Schilling on 12/9/25.
 //
 
-public protocol DefaultInitializable {
+public protocol DefaultInitializable: Sendable {
     init()
 }
