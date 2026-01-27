@@ -55,20 +55,41 @@ public actor DependencyContainer {
                 return result
             }
 
-            if let autoresolvable = T.self as? Autoresolvable.Type {
-                let instance = try autoresolvable.init(resolver: self)
-                guard let result = instance as? T else {
-                    throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: instance))
+            // Although this looks a bit odd, we need to do this in a separate function to satisfy the
+            // compiler's type checking with the sending requirement.
+            func constructAutoresolvable<U: Autoresolvable>(_ construcableType: U.Type) throws
+                -> sending T
+            {
+                let instance = try construcableType.create(resolver: self)
+                guard let instance = instance as? T else {
+                    throw ResolutionError.typeMismatch(
+                        expected: T.self,
+                        actual: type(of: instance)
+                    )
                 }
-                return result
+                return instance
             }
 
-            if let defaultInit = T.self as? DefaultInitializable.Type {
-                let instance = defaultInit.init()
-                guard let result = instance as? T else {
-                    throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: instance))
+            if let autoresolvable = T.self as? Autoresolvable.Type {
+                return try constructAutoresolvable(autoresolvable)
+            }
+
+            // Although this looks a bit odd, we need to do this in a separate function to satisfy the
+            // compiler's type checking with the sending requirement.
+            func constructDefaultInit<U: DefaultInitializable>(_ construcableType: U.Type) throws
+                -> sending T
+            {
+                let instance = construcableType.create()
+                guard let instance = instance as? T else {
+                    throw ResolutionError.typeMismatch(
+                        expected: T.self,
+                        actual: type(of: instance)
+                    )
                 }
-                return result
+                return instance
+            }
+            if let defaultInit = T.self as? any DefaultInitializable.Type {
+                return try constructDefaultInit(defaultInit)
             }
 
             throw ResolutionError.notFound
