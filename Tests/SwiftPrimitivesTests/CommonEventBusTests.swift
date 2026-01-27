@@ -154,7 +154,7 @@ struct CommonEventBusTests {
         let testEvent2 = TestEvent(message: "Second", value: 2)
         let eventCount = Synchronized<Int>(0)
 
-        var token: RegistrationToken<UUID>? = eventBus.registerObserver { (event: TestEvent) in
+        var token: RegistrationToken<UUID>? = eventBus.registerObserver { (_: TestEvent) in
             eventCount += 1
         }
 
@@ -206,7 +206,7 @@ struct CommonEventBusTests {
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<numberOfObservers {
                 group.addTask {
-                    let token = eventBus.registerObserver { (event: TestEvent) in
+                    let token = eventBus.registerObserver { (_: TestEvent) in
                         eventCounts.mutating { $0[i] += 1 }
                     }
                     tokens.append(token)
@@ -293,15 +293,15 @@ struct CommonEventBusTests {
         let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "Multiple", value: 100)
 
-        let token1 = eventBus.registerObserver { (event: TestEvent) in
+        let token1 = eventBus.registerObserver { (_: TestEvent) in
             // Observer 1
         }
 
-        let token2 = eventBus.registerObserver { (event: TestEvent) in
+        let token2 = eventBus.registerObserver { (_: TestEvent) in
             // Observer 2
         }
 
-        let token3 = eventBus.registerObserver { (event: AnotherTestEvent) in
+        let token3 = eventBus.registerObserver { (_: AnotherTestEvent) in
             // This should not handle TestEvent
         }
 
@@ -341,7 +341,7 @@ struct CommonEventBusTests {
         }
 
         // When
-        let token2 = eventBus.registerObserver { (event: TestEvent) in
+        let token2 = eventBus.registerObserver { (_: TestEvent) in
             // New observer
         }
 
@@ -365,7 +365,7 @@ struct CommonEventBusTests {
             receivedSummary.wrappedValue = summary
         }
 
-        let token2 = eventBus.registerObserver { (event: TestEvent) in
+        let token2 = eventBus.registerObserver { (_: TestEvent) in
             // Test event observer
         }
 
@@ -425,7 +425,7 @@ struct CommonEventBusTests {
         let eventBus = CommonEventBusTests.createEventBus()
         let testEventCount = Synchronized<Int>(0)
 
-        let token = eventBus.registerObserver { (event: TestEvent) in
+        let token = eventBus.registerObserver { (_: TestEvent) in
             testEventCount += 1
         }
 
@@ -450,7 +450,7 @@ struct CommonEventBusTests {
         let numberOfEvents = 100
         let receivedCount = Synchronized<Int>(0)
 
-        let token = eventBus.registerObserver { (event: NumericEvent) in
+        let token = eventBus.registerObserver { (_: NumericEvent) in
             receivedCount += 1
         }
 
@@ -477,7 +477,7 @@ struct CommonEventBusTests {
         let eventCount = Synchronized<Int>(0)
 
         for _ in 0..<5 {
-            let token = eventBus.registerObserver { (event: TestEvent) in
+            let token = eventBus.registerObserver { (_: TestEvent) in
                 eventCount += 1
             }
             tokens.append(token)

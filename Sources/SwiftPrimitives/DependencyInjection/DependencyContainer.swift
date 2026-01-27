@@ -58,8 +58,7 @@ public actor DependencyContainer {
             // Although this looks a bit odd, we need to do this in a separate function to satisfy the
             // compiler's type checking with the sending requirement.
             func constructAutoresolvable<U: Autoresolvable>(_ construcableType: U.Type) throws
-                -> sending T
-            {
+                -> sending T {
                 let instance = try construcableType.create(resolver: self)
                 guard let instance = instance as? T else {
                     throw ResolutionError.typeMismatch(
@@ -77,8 +76,7 @@ public actor DependencyContainer {
             // Although this looks a bit odd, we need to do this in a separate function to satisfy the
             // compiler's type checking with the sending requirement.
             func constructDefaultInit<U: DefaultInitializable>(_ construcableType: U.Type) throws
-                -> sending T
-            {
+                -> sending T {
                 let instance = construcableType.create()
                 guard let instance = instance as? T else {
                     throw ResolutionError.typeMismatch(
@@ -183,8 +181,7 @@ public actor DependencyContainer {
     }
     /// Construct an object using the dependency container to resolve dependencies within the provided closure.
     public func construct<T>(_ body: (borrowing any Resolver) throws -> sending T) rethrows
-        -> sending T
-    {
+        -> sending T {
         let resolver = SimpleResolver(container: self, factories: factories)
         let result = try body(resolver)
         return result
