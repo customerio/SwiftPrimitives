@@ -93,10 +93,9 @@ struct DependencyContainerTests {
 
         let container: DependencyContainer = DependencyContainer.Builder().build()
 
-        do {
+        await #expect(throws: (any Error).self) {
             let _: NonExistant = try await container.resolve()
-            Issue.record("Expected an error to be thrown")
-        } catch {}
+        }
     }
 
     @Test
