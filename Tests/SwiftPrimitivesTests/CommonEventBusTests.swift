@@ -37,7 +37,7 @@ struct CommonEventBusTests {
     // MARK: - Initialization
 
     init() {
-        var logger = Logger(label: "com.test.CommonEventBusTests")
+        var logger = Logger(label: "io.Customer.SwiftPrimitives.CommonEventBusTests")
         logger.logLevel = .debug
         self.logger = logger
         self.eventBus = CommonEventBus(logger: logger)
@@ -61,10 +61,10 @@ struct CommonEventBusTests {
     func singleObserverReceivesEvent() async throws {
         // Given
         let testEvent = TestEvent(message: "Hello", value: 42)
-        let receivedEvent = Locked<TestEvent?>(nil)
+        let receivedEvent = Synchronized<TestEvent?>(nil)
 
         let token = eventBus.registerObserver { (event: TestEvent) in
-            receivedEvent.withLock { $0 = event }
+            receivedEvent.wrappedValue = event
         }
 
         // When
@@ -74,7 +74,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        #expect(receivedEvent.withLock { $0 } == testEvent)
+        #expect(receivedEvent.wrappedValue == testEvent)
         _ = token
     }
 
@@ -82,20 +82,20 @@ struct CommonEventBusTests {
     func multipleObserversReceiveEvent() async throws {
         // Given
         let testEvent = TestEvent(message: "Broadcast", value: 100)
-        let receivedEvents = Locked<[TestEvent]>([])
+        let receivedEvents = Synchronized<[TestEvent]>([])
 
         var tokens: [RegistrationToken<UUID>] = []
 
         tokens += eventBus.registerObserver { (event: TestEvent) in
-            receivedEvents.withLock { $0.append(event) }
+            receivedEvents.append(event)
         }
 
         tokens += eventBus.registerObserver { (event: TestEvent) in
-            receivedEvents.withLock { $0.append(event) }
+            receivedEvents.append(event)
         }
 
         tokens += eventBus.registerObserver { (event: TestEvent) in
-            receivedEvents.withLock { $0.append(event) }
+            receivedEvents.append(event)
         }
 
         // When
@@ -105,7 +105,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        let events = receivedEvents.withLock { $0 }
+        let events = receivedEvents.wrappedValue
         #expect(events.count == 3)
         #expect(events.allSatisfy { $0 == testEvent })
         _ = tokens
@@ -117,15 +117,15 @@ struct CommonEventBusTests {
         let testEvent = TestEvent(message: "Test", value: 1)
         let anotherEvent = AnotherTestEvent(data: "Another")
 
-        let receivedTestEvent = Locked<TestEvent?>(nil)
-        let receivedAnotherEvent = Locked<AnotherTestEvent?>(nil)
+        let receivedTestEvent = Synchronized<TestEvent?>(nil)
+        let receivedAnotherEvent = Synchronized<AnotherTestEvent?>(nil)
 
         let token1 = eventBus.registerObserver { (event: TestEvent) in
-            receivedTestEvent.withLock { $0 = event }
+            receivedTestEvent.wrappedValue = event
         }
 
         let token2 = eventBus.registerObserver { (event: AnotherTestEvent) in
-            receivedAnotherEvent.withLock { $0 = event }
+            receivedAnotherEvent.wrappedValue = event
         }
 
         // When
@@ -136,8 +136,8 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        #expect(receivedTestEvent.withLock { $0 } == testEvent)
-        #expect(receivedAnotherEvent.withLock { $0 } == anotherEvent)
+        #expect(receivedTestEvent == testEvent)
+        #expect(receivedAnotherEvent == anotherEvent)
         _ = (token1, token2)
     }
 
@@ -148,17 +148,17 @@ struct CommonEventBusTests {
         // Given
         let testEvent1 = TestEvent(message: "First", value: 1)
         let testEvent2 = TestEvent(message: "Second", value: 2)
-        let eventCount = Locked<Int>(0)
+        let eventCount = Synchronized<Int>(0)
 
         var token: RegistrationToken<UUID>? = eventBus.registerObserver { (event: TestEvent) in
-            eventCount.withLock { $0 += 1 }
+            eventCount += 1
         }
 
         // When - Post first event
         eventBus.post(testEvent1)
         try await Task.sleep(for: .milliseconds(500))
 
-        #expect(eventCount.withLock { $0 } == 1)
+        #expect(eventCount == 1)
 
         // Deallocate token
         token = nil
@@ -169,7 +169,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        #expect(eventCount.withLock { $0 } == 1, "Should only receive the first event")
+        #expect(eventCount == 1, "Should only receive the first event")
     }
 
     // MARK: - No Observers Tests
@@ -193,17 +193,17 @@ struct CommonEventBusTests {
         // Given
         let numberOfObservers = 50
         let testEvent = TestEvent(message: "Concurrent", value: 999)
-        let eventCounts = Locked<[Int]>(Array(repeating: 0, count: numberOfObservers))
-        let tokens = Locked<[RegistrationToken<UUID>]>([])
+        let eventCounts = Synchronized<[Int]>(Array(repeating: 0, count: numberOfObservers))
+        let tokens = Synchronized<[RegistrationToken<UUID>]>([])
 
         // When - Register observers concurrently
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<numberOfObservers {
                 group.addTask {
                     let token = self.eventBus.registerObserver { (event: TestEvent) in
-                        eventCounts.withLock { $0[i] += 1 }
+                        eventCounts.mutating { $0[i] += 1 }
                     }
-                    tokens.withLock { $0.append(token) }
+                    tokens.append(token)
                 }
             }
         }
@@ -218,7 +218,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .seconds(1))
 
         // Then
-        let totalEvents = eventCounts.withLock { $0.reduce(0, +) }
+        let totalEvents = eventCounts.using { $0.reduce(0, +) }
         #expect(totalEvents == numberOfObservers, "All observers should receive the event")
         _ = tokens
     }
@@ -227,10 +227,10 @@ struct CommonEventBusTests {
     func concurrentPosting() async throws {
         // Given
         let numberOfEvents = 20
-        let receivedEvents = Locked<[NumericEvent]>([])
+        let receivedEvents = Synchronized<[NumericEvent]>([])
 
         let token = eventBus.registerObserver { (event: NumericEvent) in
-            receivedEvents.withLock { $0.append(event) }
+            receivedEvents.append(event)
         }
 
         // When - Post events concurrently
@@ -246,7 +246,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .seconds(1))
 
         // Then
-        let events = receivedEvents.withLock { $0 }
+        let events = receivedEvents.wrappedValue
         #expect(events.count == numberOfEvents, "All events should be received")
 
         // Verify all numbers are present
@@ -262,10 +262,10 @@ struct CommonEventBusTests {
     func postAndWaitReturnsDeliverySummary() async throws {
         // Given
         let testEvent = TestEvent(message: "Wait test", value: 42)
-        let receivedEvent = Locked<TestEvent?>(nil)
+        let receivedEvent = Synchronized<TestEvent?>(nil)
 
         let token = eventBus.registerObserver { (event: TestEvent) in
-            receivedEvent.withLock { $0 = event }
+            receivedEvent.wrappedValue = event
         }
 
         // When
@@ -274,7 +274,7 @@ struct CommonEventBusTests {
         // Then
         #expect(summary.registeredObservers == 1)
         #expect(summary.handlingObservers == 1)
-        #expect(receivedEvent.withLock { $0 } == testEvent)
+        #expect(receivedEvent == testEvent)
         #expect(summary.completionTime >= summary.arrivalTime)
         _ = token
     }
@@ -323,10 +323,10 @@ struct CommonEventBusTests {
     @Test("ObserverAddedMessage is posted on registration")
     func observerAddedMessage() async throws {
         // Given
-        let receivedMessage = Locked<CommonEventBus.ObserverAddedMessage?>(nil)
+        let receivedMessage = Synchronized<CommonEventBus.ObserverAddedMessage?>(nil)
 
         let token1 = eventBus.registerObserver { (message: CommonEventBus.ObserverAddedMessage) in
-            receivedMessage.withLock { $0 = message }
+            receivedMessage.wrappedValue = message
         }
 
         // When
@@ -338,7 +338,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        let message = receivedMessage.withLock { $0 }
+        let message = receivedMessage.wrappedValue
         #expect(message != nil)
         #expect(message?.handledType == TestEvent.self)
         _ = (token1, token2)
@@ -347,10 +347,10 @@ struct CommonEventBusTests {
     @Test("DeliverySummary is posted after normal event")
     func deliverySummaryPosted() async throws {
         // Given
-        let receivedSummary = Locked<CommonEventBus.DeliverySummary?>(nil)
+        let receivedSummary = Synchronized<CommonEventBus.DeliverySummary?>(nil)
 
         let token1 = eventBus.registerObserver { (summary: CommonEventBus.DeliverySummary) in
-            receivedSummary.withLock { $0 = summary }
+            receivedSummary.wrappedValue = summary
         }
 
         let token2 = eventBus.registerObserver { (event: TestEvent) in
@@ -366,7 +366,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        let summary = receivedSummary.withLock { $0 }
+        let summary = receivedSummary.wrappedValue
         #expect(summary != nil)
         #expect(summary?.handlingObservers == 1)
         _ = (token1, token2)
@@ -377,10 +377,10 @@ struct CommonEventBusTests {
     @Test("Multiple events in sequence are all delivered")
     func multipleEventsInSequence() async throws {
         // Given
-        let receivedMessages = Locked<[String]>([])
+        let receivedMessages = Synchronized<[String]>([])
 
         let token = eventBus.registerObserver { (event: TestEvent) in
-            receivedMessages.withLock { $0.append(event.message) }
+            receivedMessages.append(event.message)
         }
 
         let events = [
@@ -398,7 +398,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .seconds(1))
 
         // Then
-        let messages = receivedMessages.withLock { $0 }
+        let messages = receivedMessages.wrappedValue
         #expect(messages.count == 3)
         #expect(messages.contains("First"))
         #expect(messages.contains("Second"))
@@ -409,10 +409,10 @@ struct CommonEventBusTests {
     @Test("Observer only receives matching event type")
     func observerOnlyReceivesMatchingType() async throws {
         // Given
-        let testEventCount = Locked<Int>(0)
+        let testEventCount = Synchronized<Int>(0)
 
         let token = eventBus.registerObserver { (event: TestEvent) in
-            testEventCount.withLock { $0 += 1 }
+            testEventCount += 1
         }
 
         // When - Post multiple event types
@@ -425,7 +425,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        #expect(testEventCount.withLock { $0 } == 2, "Should only receive TestEvent instances")
+        #expect(testEventCount == 2, "Should only receive TestEvent instances")
         _ = token
     }
 
@@ -433,10 +433,10 @@ struct CommonEventBusTests {
     func largeNumberOfEvents() async throws {
         // Given
         let numberOfEvents = 100
-        let receivedCount = Locked<Int>(0)
+        let receivedCount = Synchronized<Int>(0)
 
         let token = eventBus.registerObserver { (event: NumericEvent) in
-            receivedCount.withLock { $0 += 1 }
+            receivedCount += 1
         }
 
         // When
@@ -448,7 +448,7 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .seconds(2))
 
         // Then
-        #expect(receivedCount.withLock { $0 } == numberOfEvents, "All events should be processed")
+        #expect(receivedCount == numberOfEvents, "All events should be processed")
         _ = token
     }
 
@@ -458,11 +458,11 @@ struct CommonEventBusTests {
     func multipleTokenDeallocation() async throws {
         // Given
         var tokens: [RegistrationToken<UUID>?] = []
-        let eventCount = Locked<Int>(0)
+        let eventCount = Synchronized<Int>(0)
 
         for _ in 0..<5 {
             let token = eventBus.registerObserver { (event: TestEvent) in
-                eventCount.withLock { $0 += 1 }
+                eventCount += 1
             }
             tokens.append(token)
         }
@@ -471,37 +471,20 @@ struct CommonEventBusTests {
         eventBus.post(TestEvent(message: "First", value: 1))
         try await Task.sleep(for: .milliseconds(500))
 
-        #expect(eventCount.withLock { $0 } == 5, "All observers should receive first event")
+        #expect(eventCount == 5, "All observers should receive first event")
 
         // Deallocate all tokens
         tokens.removeAll()
         try await Task.sleep(for: .milliseconds(100))
 
         // Reset count
-        eventCount.withLock { $0 = 0 }
+        eventCount.wrappedValue = 0
 
         // Post second event
         eventBus.post(TestEvent(message: "Second", value: 2))
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        #expect(eventCount.withLock { $0 } == 0, "No observers should receive second event")
-    }
-}
-
-// MARK: - Helper Type for Thread-Safe Access
-
-final class Locked<Value>: @unchecked Sendable {
-    private var value: Value
-    private let lock = NSLock()
-
-    init(_ value: Value) {
-        self.value = value
-    }
-
-    func withLock<Result>(_ body: (inout Value) -> Result) -> Result {
-        lock.lock()
-        defer { lock.unlock() }
-        return body(&value)
+        #expect(eventCount == 0, "No observers should receive second event")
     }
 }
