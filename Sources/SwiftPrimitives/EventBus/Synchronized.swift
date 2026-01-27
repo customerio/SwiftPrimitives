@@ -34,28 +34,38 @@ public final class Synchronized<T>: @unchecked Sendable {
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func mutatingAsync<Result: Sendable>(
-        _ body: sending @escaping (inout T) throws -> sending Result
+    public func mutatingAsync<Result>(
+        _ body: @Sendable (inout T) throws -> sending Result
     ) async throws -> Result {
-        let task = Task.detached {
-            try self.lock.withLock {
-                try body(&self._wrappedValue)
+        try await withoutActuallyEscaping(body) { escapingBody in
+            try await withUnsafeThrowingContinuation { continuation in
+                Task.detached {
+                    let result = Swift.Result {
+                        try self.lock.withLock {
+                            try escapingBody(&self._wrappedValue)
+                        }
+                    }
+                    continuation.resume(with: result)
+                }
             }
         }
-        return try await task.value
     }
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func mutatingAsync<Result: Sendable>(
-        _ body: sending @escaping (inout T) -> sending Result
+    public func mutatingAsync<Result>(
+        _ body: @Sendable (inout T) -> sending Result
     ) async -> sending Result {
-        let task = Task.detached {
-            self.lock.withLock {
-                body(&self._wrappedValue)
+        await withoutActuallyEscaping(body) { escapingBody in
+            await withUnsafeContinuation { continuation in
+                Task.detached {
+                    let result = self.lock.withLock {
+                        escapingBody(&self._wrappedValue)
+                    }
+                    continuation.resume(returning: result)
+                }
             }
         }
-        return await task.value
     }
 
     /// Access the wrapped value in a thread-safe manor.
@@ -69,28 +79,38 @@ public final class Synchronized<T>: @unchecked Sendable {
 
     /// Access the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func usingAsync<Result: Sendable>(
-        _ body: sending @escaping (T) throws -> sending Result
+    public func usingAsync<Result>(
+        _ body: @Sendable (T) throws -> sending Result
     ) async throws -> sending Result {
-        let task = Task.detached {
-            try self.lock.withLock {
-                try body(self._wrappedValue)
+        try await withoutActuallyEscaping(body) { escapingBody in
+            try await withUnsafeThrowingContinuation { continuation in
+                Task.detached {
+                    let result = Swift.Result {
+                        try self.lock.withLock {
+                            try escapingBody(self._wrappedValue)
+                        }
+                    }
+                    continuation.resume(with: result)
+                }
             }
         }
-        return try await task.value
     }
 
     /// Modify the wrapped value in a thread-safe manor without blocking the current thread but
     /// asynchronously waiting for it to finish. The body will be executed atomically before the call returns.
-    public func usingAsync<Result: Sendable>(
-        _ body: sending @escaping (T) -> sending Result
+    public func usingAsync<Result>(
+        _ body: @Sendable (T) -> sending Result
     ) async -> sending Result {
-        let task = Task.detached {
-            self.lock.withLock {
-                body(self._wrappedValue)
+        await withoutActuallyEscaping(body) { escapingBody in
+            await withUnsafeContinuation { continuation in
+                Task.detached {
+                    let result = self.lock.withLock {
+                        escapingBody(self._wrappedValue)
+                    }
+                    continuation.resume(returning: result)
+                }
             }
         }
-        return await task.value
     }
 }
 
