@@ -31,16 +31,15 @@ struct CommonEventBusTests {
 
     // MARK: - Helper Properties
 
-    let eventBus: CommonEventBus
-    let logger: Logger
+    public static func createEventBus() -> CommonEventBus {
+        var logger = Logger(label: "io.Customer.SwiftPrimitives.CommonEventBusTests.Helper")
+        logger.logLevel = .debug
+        return CommonEventBus(logger: logger)
+    }
 
     // MARK: - Initialization
 
     init() {
-        var logger = Logger(label: "io.Customer.SwiftPrimitives.CommonEventBusTests")
-        logger.logLevel = .debug
-        self.logger = logger
-        self.eventBus = CommonEventBus(logger: logger)
     }
 
     // MARK: - Basic Registration and Posting Tests
@@ -49,6 +48,7 @@ struct CommonEventBusTests {
     func registerObserverReturnsValidToken() {
 
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let token = eventBus.registerObserver { (event: TestEvent) in
             _ = event
         }
@@ -60,6 +60,7 @@ struct CommonEventBusTests {
     @Test("Single observer receives posted event")
     func singleObserverReceivesEvent() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "Hello", value: 42)
         let receivedEvent = Synchronized<TestEvent?>(nil)
 
@@ -81,6 +82,7 @@ struct CommonEventBusTests {
     @Test("Multiple observers all receive event")
     func multipleObserversReceiveEvent() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "Broadcast", value: 100)
         let receivedEvents = Synchronized<[TestEvent]>([])
 
@@ -114,6 +116,7 @@ struct CommonEventBusTests {
     @Test("Only matching observers receive specific event types")
     func eventTypeFiltering() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "Test", value: 1)
         let anotherEvent = AnotherTestEvent(data: "Another")
 
@@ -146,6 +149,7 @@ struct CommonEventBusTests {
     @Test("Token deallocation removes observer")
     func tokenDeallocationRemovesObserver() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent1 = TestEvent(message: "First", value: 1)
         let testEvent2 = TestEvent(message: "Second", value: 2)
         let eventCount = Synchronized<Int>(0)
@@ -177,6 +181,7 @@ struct CommonEventBusTests {
     @Test("Posting event with no observers does not error")
     func postEventWithNoObservers() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "No listeners", value: 0)
 
         // When/Then - Should not crash or throw
@@ -191,6 +196,7 @@ struct CommonEventBusTests {
     @Test("Concurrent registration registers all observers")
     func concurrentRegistration() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let numberOfObservers = 50
         let testEvent = TestEvent(message: "Concurrent", value: 999)
         let eventCounts = Synchronized<[Int]>(Array(repeating: 0, count: numberOfObservers))
@@ -200,7 +206,7 @@ struct CommonEventBusTests {
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<numberOfObservers {
                 group.addTask {
-                    let token = self.eventBus.registerObserver { (event: TestEvent) in
+                    let token = eventBus.registerObserver { (event: TestEvent) in
                         eventCounts.mutating { $0[i] += 1 }
                     }
                     tokens.append(token)
@@ -226,6 +232,7 @@ struct CommonEventBusTests {
     @Test("Concurrent posting delivers all events")
     func concurrentPosting() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let numberOfEvents = 20
         let receivedEvents = Synchronized<[NumericEvent]>([])
 
@@ -237,7 +244,7 @@ struct CommonEventBusTests {
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<numberOfEvents {
                 group.addTask {
-                    self.eventBus.post(NumericEvent(number: i))
+                    eventBus.post(NumericEvent(number: i))
                 }
             }
         }
@@ -261,6 +268,7 @@ struct CommonEventBusTests {
     @Test("PostAndWait returns delivery summary")
     func postAndWaitReturnsDeliverySummary() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "Wait test", value: 42)
         let receivedEvent = Synchronized<TestEvent?>(nil)
 
@@ -282,6 +290,7 @@ struct CommonEventBusTests {
     @Test("PostAndWait with multiple observers shows correct counts")
     func postAndWaitMultipleObservers() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "Multiple", value: 100)
 
         let token1 = eventBus.registerObserver { (event: TestEvent) in
@@ -308,6 +317,7 @@ struct CommonEventBusTests {
     @Test("PostAndWait with no observers shows zero counts")
     func postAndWaitNoObservers() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEvent = TestEvent(message: "No observers", value: 0)
 
         // When
@@ -323,6 +333,7 @@ struct CommonEventBusTests {
     @Test("ObserverAddedMessage is posted on registration")
     func observerAddedMessage() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let receivedMessage = Synchronized<CommonEventBus.ObserverAddedMessage?>(nil)
 
         let token1 = eventBus.registerObserver { (message: CommonEventBus.ObserverAddedMessage) in
@@ -347,6 +358,7 @@ struct CommonEventBusTests {
     @Test("DeliverySummary is posted after normal event")
     func deliverySummaryPosted() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let receivedSummary = Synchronized<CommonEventBus.DeliverySummary?>(nil)
 
         let token1 = eventBus.registerObserver { (summary: CommonEventBus.DeliverySummary) in
@@ -377,6 +389,7 @@ struct CommonEventBusTests {
     @Test("Multiple events in sequence are all delivered")
     func multipleEventsInSequence() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let receivedMessages = Synchronized<[String]>([])
 
         let token = eventBus.registerObserver { (event: TestEvent) in
@@ -409,6 +422,7 @@ struct CommonEventBusTests {
     @Test("Observer only receives matching event type")
     func observerOnlyReceivesMatchingType() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let testEventCount = Synchronized<Int>(0)
 
         let token = eventBus.registerObserver { (event: TestEvent) in
@@ -432,6 +446,7 @@ struct CommonEventBusTests {
     @Test("Large number of events are all processed")
     func largeNumberOfEvents() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         let numberOfEvents = 100
         let receivedCount = Synchronized<Int>(0)
 
@@ -457,6 +472,7 @@ struct CommonEventBusTests {
     @Test("Multiple token deallocation removes all observers")
     func multipleTokenDeallocation() async throws {
         // Given
+        let eventBus = CommonEventBusTests.createEventBus()
         var tokens: [RegistrationToken<UUID>?] = []
         let eventCount = Synchronized<Int>(0)
 
