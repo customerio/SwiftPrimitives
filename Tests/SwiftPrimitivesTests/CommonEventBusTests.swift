@@ -37,11 +37,6 @@ struct CommonEventBusTests {
         return CommonEventBus(logger: logger)
     }
 
-    // MARK: - Initialization
-
-    init() {
-    }
-
     // MARK: - Basic Registration and Posting Tests
 
     @Test("Register observer returns valid token")
