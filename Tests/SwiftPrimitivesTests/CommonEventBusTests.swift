@@ -334,10 +334,10 @@ struct CommonEventBusTests {
     func observerAddedMessage() async throws {
         // Given
         let eventBus = CommonEventBusTests.createEventBus()
-        let receivedMessage = Synchronized<CommonEventBus.ObserverAddedMessage?>(nil)
+        let receivedMessages = Synchronized<[CommonEventBus.ObserverAddedMessage]>([])
 
         let token1 = eventBus.registerObserver { (message: CommonEventBus.ObserverAddedMessage) in
-            receivedMessage.wrappedValue = message
+            receivedMessages.append(message)
         }
 
         // When
@@ -349,9 +349,12 @@ struct CommonEventBusTests {
         try await Task.sleep(for: .milliseconds(500))
 
         // Then
-        let message = receivedMessage.wrappedValue
-        #expect(message != nil)
-        #expect(message?.handledType == TestEvent.self)
+        // Order of delivery is not guaranteed for events posted very close together.
+        // Listeners for ObserverAddedMessage also receive notification of their own registration,
+        // and sometimes that happens after the second observer is registered.
+        let messages = receivedMessages.wrappedValue
+        #expect(messages.count >= 1)
+        #expect(messages.contains { $0.handledType == TestEvent.self })
         _ = (token1, token2)
     }
 
