@@ -1,5 +1,22 @@
 /// A Simple Dependency Injection Container
-public final class DependencyContainer: Sendable {
+public actor DependencyContainer {
+
+    private static func makeSingletonFactory<T: Sendable>(
+        as type: T.Type = T.self,
+        factory: @Sendable @escaping (borrowing any Resolver) throws -> T
+    ) -> @Sendable (borrowing any Resolver) throws -> sending T {
+        let instance: Synchronized<T?> = Synchronized(nil)
+        return { resolver in
+            try instance.mutating { value in
+                if let existing = value {
+                    return existing
+                }
+                let newInstance = try factory(resolver)
+                value = newInstance
+                return newInstance
+            }
+        }
+    }
 
     /// Possible errors that can be encountered while resolving object.
     public enum ResolutionError: Error {
@@ -13,24 +30,24 @@ public final class DependencyContainer: Sendable {
         case expired
     }
 
-    private class SimpleResolver: Resolver {
+    private struct SimpleResolver: Resolver {
 
         public let container: DependencyContainer
-        private let factories: [ObjectIdentifier: (Resolver) throws -> Any]
-        public private(set) var isExpired: Bool = false
+        private let factories:
+            [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
 
-        init(container: DependencyContainer, factories: [ObjectIdentifier: (Resolver) throws -> Any]) {
+        init(
+            container: DependencyContainer,
+            factories: [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
+        ) {
             self.container = container
             self.factories = factories
         }
 
-        public func resolve<T>() throws -> T {
-            guard !isExpired else {
-                throw ResolutionError.expired
-            }
-
+        public func resolve<T>() throws -> sending T {
             let id = ObjectIdentifier(T.self)
-            if let factory = factories[id] {
+
+            if let factory: (any Resolver) throws -> sending Any = factories[id] {
                 let untyped = try factory(self)
                 guard let result = untyped as? T else {
                     throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: untyped))
@@ -38,141 +55,142 @@ public final class DependencyContainer: Sendable {
                 return result
             }
 
-            if let autoresolvable = T.self as? Autoresolvable.Type {
-                let instance = try autoresolvable.init(resolver: self)
-                guard let result = instance as? T else {
-                    throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: instance))
+            // Although this looks a bit odd, we need to do this in a separate function to satisfy the
+            // compiler's type checking with the sending requirement.
+            func constructAutoresolvable<U: Autoresolvable>(_ construcableType: U.Type) throws
+                -> sending T {
+                let instance = try construcableType.create(resolver: self)
+                guard let instance = instance as? T else {
+                    throw ResolutionError.typeMismatch(
+                        expected: T.self,
+                        actual: type(of: instance)
+                    )
                 }
-                return result
+                return instance
             }
 
-            if let defaultInit = T.self as? DefaultInitializable.Type {
-                let instance = defaultInit.init()
-                guard let result = instance as? T else {
-                    throw ResolutionError.typeMismatch(expected: T.self, actual: type(of: instance))
+            if let autoresolvable = T.self as? Autoresolvable.Type {
+                return try constructAutoresolvable(autoresolvable)
+            }
+
+            // Although this looks a bit odd, we need to do this in a separate function to satisfy the
+            // compiler's type checking with the sending requirement.
+            func constructDefaultInit<U: DefaultInitializable>(_ construcableType: U.Type) throws
+                -> sending T {
+                let instance = construcableType.create()
+                guard let instance = instance as? T else {
+                    throw ResolutionError.typeMismatch(
+                        expected: T.self,
+                        actual: type(of: instance)
+                    )
                 }
-                return result
+                return instance
+            }
+            if let defaultInit = T.self as? any DefaultInitializable.Type {
+                return try constructDefaultInit(defaultInit)
             }
 
             throw ResolutionError.notFound
-        }
-
-        public func expire() {
-            isExpired = true
         }
     }
 
     /// The intended way to construct a DependencyContainer.
     public struct Builder {
-        private var factories: [ObjectIdentifier: (Resolver) throws -> Any] = [:]
+        private let factories:
+            [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
 
-        public init() { }
+        public init() {
+            self.factories = [:]
+        }
+
+        private init(
+            factories: [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
+        ) {
+            self.factories = factories
+        }
 
         /// Registers a closure to be invoked to create objects when the provided type is resolved.
         /// A new object is generated for each request.
-        public func register<T>(as type: T.Type = T.self, factory: @escaping (Resolver) throws -> T) -> Self {
-            var result = self
+        public func register<T>(
+            as type: T.Type = T.self,
+            factory: @Sendable @escaping (borrowing any Resolver) throws -> sending T
+        ) -> Self {
+            var factories = self.factories
             let id = ObjectIdentifier(type)
-            result.factories[id] = factory
-
-            return result
+            factories[id] = factory
+            return Builder(factories: factories)
         }
 
         /// Registers an object to be used when an object attempts to resolve the provided type.
-        public func register<T>(as type: T.Type = T.self, singleton: T) -> Self {
+        public func register<T: Sendable>(as type: T.Type = T.self, singleton: T) -> Self {
             return register(as: type) { _ in singleton }
         }
 
         /// Registers a closure to create a singleton when it is first requested. Once created, that
         /// same object will be returned from all subsequent requests.
-        public func registerLazySingleton<T>(as type: T.Type = T.self, factory: @escaping (Resolver) throws -> T) -> Self {
-            var instance: T?
-            return register(as: type) { resolver in
-                if let instance = instance {
-                    return instance
-                }
-                instance = try factory(resolver)
-                return instance!
-            }
+        public func registerLazySingleton<T: Sendable>(
+            as type: T.Type = T.self,
+            factory: @Sendable @escaping (borrowing any Resolver) throws -> T
+        ) -> Self {
+            return register(
+                as: type,
+                factory: DependencyContainer.makeSingletonFactory(as: type, factory: factory)
+            )
         }
 
         /// Called to generate the DependencyContainer when registrations are completed.
         public func build() -> DependencyContainer {
-            DependencyContainer(factories: factories)
+            let copy = self.factories
+            return DependencyContainer(factories: copy)
         }
-
     }
 
-    private let factories: Synchronized<[ObjectIdentifier: (Resolver) throws -> Any]>
+    private var factories:
+        [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
 
-    private init(factories: [ObjectIdentifier: (Resolver) throws -> Any]) {
-        // Since our closures for lazy methods aren't sendable and concurrent reentry safe,
-        // we disable concurrent reads.
-        self.factories = Synchronized(factories, allowConcurrentReads: false)
-
+    private init(
+        factories: [ObjectIdentifier: @Sendable (borrowing any Resolver) throws -> sending Any]
+    ) {
+        self.factories = factories
     }
 
-    public func register<T>(as type: T.Type = T.self, factory: @escaping (Resolver) throws -> T) {
-
+    /// Registers a closure to be invoked to create objects when the provided type is resolved.
+    /// A new object is generated for each request.
+    public func register<T>(
+        as type: T.Type = T.self,
+        factory: @Sendable @escaping (borrowing any Resolver) throws -> sending T
+    ) {
         let id = ObjectIdentifier(type)
         factories[id] = factory
     }
-
-    public func register<T>(as type: T.Type = T.self, constructor: @escaping () -> T) {
-        register(as: type) { _ in constructor() }
+    /// Registers an object to be used when an object attempts to resolve the provided type.
+    public func register<T: Sendable>(as type: T.Type = T.self, singleton: T) {
+        return register(as: type) { _ in singleton }
     }
 
-    public func register<T>(as type: T.Type = T.self, singleton: T) {
-        register(as: type) { _ in singleton }
+    /// Registers a closure to create a singleton when it is first requested. Once created, that
+    /// same object will be returned from all subsequent requests.
+    public func registerLazySingleton<T: Sendable>(
+        as type: T.Type = T.self,
+        factory: @Sendable @escaping (borrowing any Resolver) throws -> T
+    ) {
+        register(
+            as: type,
+            factory: Self.makeSingletonFactory(as: type, factory: factory)
+        )
+    }
+    /// Construct an object using the dependency container to resolve dependencies within the provided closure.
+    public func construct<T>(_ body: (borrowing any Resolver) throws -> sending T) rethrows
+        -> sending T {
+        let resolver = SimpleResolver(container: self, factories: factories)
+        let result = try body(resolver)
+        return result
     }
 
-    public func registerLazySingleton<T>(as type: T.Type = T.self, factory: @escaping (Resolver) throws -> T) async {
-
-        var instance: T?
-        register(as: type) { resolver in
-            if let instance = instance {
-                return instance
-            }
-            instance = try resolver.resolve()
-            return instance!
-        }
+    /// Resolves an object of the specified type from the container.
+    public func resolve<T>() throws -> sending T {
+        let resolver = SimpleResolver(container: self, factories: factories)
+        let result: T = try resolver.resolve()
+        return result
     }
-
-    public func construct<T>(_ body: (Resolver) throws -> T) rethrows -> T {
-        return try factories.using { factoriesUnwrapped in
-            let resolver = SimpleResolver(container: self, factories: factoriesUnwrapped)
-            let result = try body(resolver)
-            resolver.expire()
-            return result
-        }
-    }
-
-    @preconcurrency
-    public func constructAsync<T>(_ body: @Sendable @escaping (Resolver) throws -> T) async throws -> sending T {
-        return try await factories.usingAsync { factoriesUnwrapped in
-            let resolver = SimpleResolver(container: self, factories: factoriesUnwrapped)
-            let result = try body(resolver)
-            resolver.expire()
-            return result
-        }
-    }
-
-    public func resolve<T>() throws -> T {
-        return try factories.using { factoriesUnwrapped in
-            let resolver = SimpleResolver(container: self, factories: factoriesUnwrapped)
-            let result: T = try resolver.resolve()
-            resolver.expire()
-            return result
-        }
-    }
-
-    public func resolveAsync<T: Sendable>() async throws -> T {
-        return try await factories.usingAsync { factoriesUnwrapped in
-            let resolver = SimpleResolver(container: self, factories: factoriesUnwrapped)
-            let result: T = try resolver.resolve()
-            resolver.expire()
-            return result
-        }
-    }
-
 }

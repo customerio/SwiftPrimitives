@@ -6,5 +6,12 @@
 //
 
 public protocol Autoresolvable {
-    init(resolver: Resolver) throws
+    static func create(resolver: borrowing any Resolver) throws -> sending Self
+    init(resolver: borrowing any Resolver) throws
+}
+
+extension Autoresolvable where Self: Sendable {
+    public static func create(resolver: borrowing any Resolver) throws -> sending Self {
+        return try Self.init(resolver: resolver)
+    }
 }
