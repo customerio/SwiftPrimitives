@@ -70,9 +70,6 @@ public final class CommonEventBus: Sendable, EventBus {
             listener(event)
             return true
         }
-        observers.mutating {
-            $0[token.identifier] = wrappedListener
-        }
         observers[token.identifier] = wrappedListener
         logger.debug(
             "Registration complete for events of type \(String(describing: EventType.self)) and assigned identifier \(token.identifier.uuidString)."
