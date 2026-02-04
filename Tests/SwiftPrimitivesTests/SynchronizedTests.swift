@@ -1,7 +1,6 @@
 import Foundation
-import Testing
-
 import SwiftPrimitives
+import Testing
 
 struct SynchronizedTests {
     @Test
@@ -61,7 +60,7 @@ struct SynchronizedTests {
         let initial = 31415
         let sync = Synchronized(initial)
 
-        let fakeThrows: @Sendable (Int) throws -> Int = { value in
+        let fakeThrows: @Sendable (Int) throws -> sending Int = { value in
             #expect(value == 31415)
             return value + 1
         }
@@ -111,7 +110,7 @@ struct SynchronizedTests {
         let initial = 31415
         let sync = Synchronized(initial)
 
-        let fakeThrows: @Sendable (inout Int) throws -> Int = { value in
+        let fakeThrows: @Sendable (inout Int) throws -> sending Int = { value in
             #expect(value == initial)
             value += 1
             return value + 2
@@ -136,7 +135,7 @@ struct SynchronizedTests {
         let operationQueue = OperationQueue()
         operationQueue.isSuspended = true
 
-        for _ in 0 ..< 1000000 {
+        for _ in 0..<1_000_000 {
             operationQueue.addOperation {
                 sync += 1
             }
@@ -144,7 +143,7 @@ struct SynchronizedTests {
         operationQueue.isSuspended = false
         operationQueue.waitUntilAllOperationsAreFinished()
 
-        #expect(sync.wrappedValue == 1000000)
+        #expect(sync.wrappedValue == 1_000_000)
     }
 
     // MARK: - Equatable Operation Extensions
@@ -319,7 +318,7 @@ struct SynchronizedTests {
     func testDictionarySubscriptGet() {
         let initial = [
             "foo": 1,
-            "bar": 2
+            "bar": 2,
         ]
         let sync = Synchronized(initial)
 
@@ -331,7 +330,7 @@ struct SynchronizedTests {
     func testDictionarySubscriptSet() {
         let initial = [
             "foo": 1,
-            "bar": 2
+            "bar": 2,
         ]
         let sync = Synchronized(initial)
 
@@ -345,7 +344,7 @@ struct SynchronizedTests {
     func testDictionaryRemoveValue() {
         let initial = [
             "foo": 1,
-            "bar": 2
+            "bar": 2,
         ]
         let sync = Synchronized(initial)
 

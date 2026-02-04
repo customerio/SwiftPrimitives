@@ -1,6 +1,6 @@
 import Foundation
 
-public enum Commuted {
+public enum Commuted: Sendable {
     case null
     case bool(Bool)
     case int(Int64)
@@ -66,7 +66,8 @@ extension Commuted: Codable {
             self = .data(value)
         } else {
             let description = "No valid Commuted-supported value was found"
-            let context = DecodingError.Context(codingPath: container.codingPath, debugDescription: description)
+            let context = DecodingError.Context(
+                codingPath: container.codingPath, debugDescription: description)
             throw DecodingError.valueNotFound(Commuted.self, context)
         }
 

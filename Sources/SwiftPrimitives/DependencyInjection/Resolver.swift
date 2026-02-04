@@ -5,7 +5,7 @@
 //  Created by Holly Schilling on 12/8/25.
 //
 
-public protocol Resolver {
+public protocol Resolver: ~Escapable & ~Copyable {
     var container: DependencyContainer { get }
-    func resolve<T>() throws -> T
+    func resolve<T>() throws -> sending T
 }

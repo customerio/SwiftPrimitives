@@ -1,8 +1,7 @@
 import Foundation
 import Testing
 
-@testable
-import SwiftPrimitives
+@testable import SwiftPrimitives
 
 struct TimeIntervalExtensionTests {
     @Test
