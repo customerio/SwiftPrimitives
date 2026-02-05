@@ -1,7 +1,7 @@
 import Foundation
 import Logging
 
-public protocol EventBus {
+public protocol EventBus: Sendable {
     func registerObserver<EventType: Sendable>(listener: @Sendable @escaping (EventType) -> Void)
         -> RegistrationToken<UUID>
     func post(_ event: any Sendable)

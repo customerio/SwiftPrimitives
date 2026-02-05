@@ -146,6 +146,93 @@ struct SynchronizedTests {
         #expect(sync.wrappedValue == 1_000_000)
     }
 
+    // MARK: - atomicSetAndFetch Tests
+
+    @Test
+    func testAtomicSetAndFetchReturnsOldValue() throws {
+        let initial = 42
+        let sync = Synchronized(initial)
+
+        let oldValue = sync.atomicSetAndFetch(100)
+
+        #expect(oldValue == initial)
+    }
+
+    @Test
+    func testAtomicSetAndFetchSetsNewValue() throws {
+        let initial = 42
+        let newValue = 100
+        let sync = Synchronized(initial)
+
+        _ = sync.atomicSetAndFetch(newValue)
+
+        #expect(sync.wrappedValue == newValue)
+    }
+
+    @Test
+    func testAtomicSetAndFetchWithString() throws {
+        let initial = "hello"
+        let newValue = "world"
+        let sync = Synchronized(initial)
+
+        let oldValue = sync.atomicSetAndFetch(newValue)
+
+        #expect(oldValue == initial)
+        #expect(sync.wrappedValue == newValue)
+    }
+
+    @Test
+    func testAtomicSetAndFetchWithOptional() throws {
+        let initial: Int? = 42
+        let newValue: Int? = nil
+        let sync = Synchronized(initial)
+
+        let oldValue = sync.atomicSetAndFetch(newValue)
+
+        #expect(oldValue == initial)
+        #expect(sync.wrappedValue == nil)
+    }
+
+    @Test
+    func testAtomicSetAndFetchThreadSafety() throws {
+        let sync = Synchronized(0)
+        let collectedOldValues: Synchronized<[Int]> = Synchronized([])
+
+        let operationQueue = OperationQueue()
+        operationQueue.isSuspended = true
+
+        for i in 0..<1000 {
+            operationQueue.addOperation {
+                let oldValue = sync.atomicSetAndFetch(i + 1)
+                collectedOldValues.append(oldValue)
+            }
+        }
+        operationQueue.isSuspended = false
+        operationQueue.waitUntilAllOperationsAreFinished()
+
+        // All old values should be unique (no race conditions)
+        let uniqueValues = Set(collectedOldValues.wrappedValue)
+        #expect(collectedOldValues.count == 1000)
+        #expect(uniqueValues.count == 1000)
+
+        // The final value should be set to one of the attempted values
+        #expect(sync.wrappedValue >= 1 && sync.wrappedValue <= 1000)
+    }
+
+    @Test
+    func testAtomicSetAndFetchSequentialOperations() throws {
+        let sync = Synchronized(10)
+
+        let first = sync.atomicSetAndFetch(20)
+        let second = sync.atomicSetAndFetch(30)
+        let third = sync.atomicSetAndFetch(40)
+
+        #expect(first == 10)
+        #expect(second == 20)
+        #expect(third == 30)
+        #expect(sync.wrappedValue == 40)
+    }
+
     // MARK: - Equatable Operation Extensions
 
     @Test

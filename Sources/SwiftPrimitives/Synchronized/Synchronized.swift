@@ -112,4 +112,13 @@ public final class Synchronized<T>: @unchecked Sendable {
             }
         }
     }
+    
+    /// Sets a new value while returning the old one in one atomic operation..
+    public func atomicSetAndFetch(_ newValue: T) -> T {
+        mutating {
+            let oldValue = $0
+            $0 = newValue
+            return oldValue
+        }
+    }
 }
